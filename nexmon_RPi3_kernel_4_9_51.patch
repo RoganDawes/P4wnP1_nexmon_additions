@@ -1,0 +1,13 @@
+diff --git a/patches/bcm43430a1/7_45_41_46/nexmon/brcmfmac_kernel49/Makefile b/patches/bcm43430a1/7_45_41_46/nexmon/brcmfmac_kernel49/Makefile
+index ddca8861..d87739da 100644
+--- a/patches/bcm43430a1/7_45_41_46/nexmon/brcmfmac_kernel49/Makefile
++++ b/patches/bcm43430a1/7_45_41_46/nexmon/brcmfmac_kernel49/Makefile
+@@ -19,6 +19,8 @@ ccflags-y += \
+ 	-Idrivers/net/wireless/brcm80211/brcmfmac	\
+ 	-I$(NEXMON_ROOT)/patches/bcm43438/7_45_41_26/nexmon/brcmfmac_kernel49/include
+ 
++ccflags-$(CONFIG_BRCMDBG)	+= -DDEBUG
++
+ obj-$(CONFIG_BRCMFMAC) += brcmfmac.o
+ brcmfmac-objs += \
+ 		cfg80211.o \
