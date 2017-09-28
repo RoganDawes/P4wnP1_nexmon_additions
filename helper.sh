@@ -18,24 +18,46 @@
 #    You should have received a copy of the GNU General Public License
 #    along with P4wnP1.  If not, see <http://www.gnu.org/licenses/>.
 
+function switch_nexmon()
+{
+	#backup-firmware
+	if [ ! -f brcmfmac43430-sdio.bin.orig ]; then
+		printf "\033[0;31m  BACKUP\033[0m of brcmfmac43430-sdio.bin written to $(pwd)/brcmfmac43430-sdio.bin.orig\n"
+		cp /lib/firmware/brcm/brcmfmac43430-sdio.bin brcmfmac43430-sdio.bin.orig
+	fi
 
-#backup-firmware
-if [ ! -f brcmfmac43430-sdio.bin.orig ]; then
-	printf "\033[0;31m  BACKUP\033[0m of brcmfmac43430-sdio.bin written to $(pwd)/brcmfmac43430-sdio.bin.orig\n"
-	cp /lib/firmware/brcm/brcmfmac43430-sdio.bin brcmfmac43430-sdio.bin.orig
-fi
+	#install-firmware: brcmfmac43430-sdio.bin brcmfmac.ko
+	printf "\033[0;31m  COPYING\033[0m brcmfmac43430-sdio.bin => /lib/firmware/brcm/brcmfmac43430-sdio.bin\n"
+	cp brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
 
-#install-firmware: brcmfmac43430-sdio.bin brcmfmac.ko
-printf "\033[0;31m  COPYING\033[0m brcmfmac43430-sdio.bin => /lib/firmware/brcm/brcmfmac43430-sdio.bin\n"
-cp brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
+	if [ $(lsmod | grep "^brcmfmac" | wc -l) == "1" ]
+	then
+		printf "\033[0;31m  UNLOADING\033[0m brcmfmac\n"
+	        sudo rmmod brcmfmac
+	fi
 
-if [ $(lsmod | grep "^brcmfmac" | wc -l) == "1" ]
-then
-	printf "\033[0;31m  UNLOADING\033[0m brcmfmac\n"
-        sudo rmmod brcmfmac
-fi
+	sudo modprobe brcmutil
+	printf "\033[0;31m  RELOADING\033[0m brcmfmac\n"
 
-sudo modprobe brcmutil
-printf "\033[0;31m  RELOADING\033[0m brcmfmac\n"
+	sudo insmod brcmfmac.ko
+}
 
-sudo insmod brcmfmac.ko
+function switch_legacy()
+{
+	printf "\033[0;31m  COPYING\033[0m brcmfmac43430-sdio.bin.backup => /lib/firmware/brcm/brcmfmac43430-sdio.bin\n"
+	cp brcmfmac43430-sdio.bin.backup /lib/firmware/brcm/brcmfmac43430-sdio.bin
+
+	if [ $(lsmod | grep "^brcmfmac" | wc -l) == "1" ]
+	then
+		printf "\033[0;31m  UNLOADING\033[0m brcmfmac\n"
+	        sudo rmmod brcmfmac
+	fi
+
+	sudo modprobe brcmutil
+	printf "\033[0;31m  RELOADING\033[0m brcmfmac\n"
+
+	sudo insmod /lib/modules/$(uname -r)/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+}
+
+switch_legacy
+switch_nexmon
