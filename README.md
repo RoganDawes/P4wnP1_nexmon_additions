@@ -1,58 +1,176 @@
-# P4wnP1_nexmon_additions
+# P4wnP1_nexmon_additions by MaMe82 (WiFi monitor + injection + AP + firmware-based KARMA attack)
 
 This repository is part of the P4wnP1 project and holds pre-compiled Nexmon binaries. The binaries are build for Raspbian Stretch with Kernel `4.9.51+`.
 
 Nexmon by [@seemoo-lab](https://github.com/seemoo-lab) (NexMon Team) is licensed under GNU General Public License v3.0. The sources used to compile could be found here:
 ~ ~https://github.com/seemoo-lab/nexmon/tree/934c7066819913687742aba217a1d75b98c1d883~ ~
-https://github.com/mame82/nexmon/tree/dual_interface_AP_mode
+https://github.com/mame82/nexmon/tree/b358fa97c2679ccc664930da4a3bdc6408ad8409
 
-Custom source is used, till merged into nexmon main RePo. This adds in AP support while having a monitor interface up.
+Custom source is used, till merged into nexmon main RePo. This adds in KARMA attack + AP support while having a monitor interface up.
 
-Mode 7 has been added: `nexutil -m7` doesn't bring up a monitor interface, but allows adding one. This means:
+By default the firmware / driver runs with monitor interface disable. To bring it up use:
 
-- `airmon-ng` could be used (throws an error but works). 
-- `hostapd` succeeds in adding a monitor interface (not really needed and **shouldn't be used**)
-- `hostapd-mana` succeeds in adding an monitor interface (this time it is needed, to carry out KARMA ATTACKS)
+`iw phyN interface add mon0 type monitor; ifconfig mon0 up`
+
+where `phyN` has to be replaced by the name of the physical interface, which for example is shown by the following command:
+
+`iw list`
+
+Under normal circumstances it should be `phy0`
+
+
+Having the monitor + injection capable interface up, means tools like airodump-ng or aireplay-ng could be used.
+
 
 
 P4wnP1 is licensed GNU General Public License v3.0, source code is here:
 https://github.com/mame82/P4wnP1
 
-Note on hostapd:
-----------------
+## Access Point mode with hostapd
 
-The broadcom brcm43430a1 chipset of the Raspberry works with hostaps's nl80211 driver. 
-In early versions of this driver, a dedicated monitor interface was used by hostapd to grab *probe request
-frames* and send *beacon frames*.
+### TL;TR 
+To allow AP mode with hostapd, the **monitor interface has to be brought 
+up (steps described above) before hostapd is started**.
 
-Although this isn't needed on current drivers/firmware (there are special commands which fulfill this 
-task without a dedicated monitpr interface), **hostapd tries to bring up a monitor interface**. 
-If this doesn't succeed, hostapd fails over to a mode without monitor interface.
+### Hostapd knows two modes of operations:
 
-This results in different behavior of **legacy hostapd** and **hostapd-mana** (by Sensepost).
+1. Under normal circumstances the driver/firmware of a WiFi interface 
+only communicates data frames to the userland. This excludes management 
+and control frames. But to deal with stations trying to connect to an 
+access point, hostapd needs to receive and send these management and 
+control frames. This is because AP beacons, probe requests, authentication 
+requests, association requests and others are transmitted as management 
+frames. To solve this problem hostapd uses a monitor interface which is
+able to send and receive raw 802.11 (a.k.a frame injection + monitor 
+capability, to be more precise - radiotap headers are needed, too).
+This again means, a WiFi interface working with hostapd has to provide
+a monitor/injection interface along with a second interface which supports
+AP mode.
 
-1. **legacy hostapd**: If hostapd is allowed to bring up the monitor interface, it doesn't fail over
-to the "monitor-less" configuration. This resulted in a non working Access Point in all of my tests
-(AP is visible, but clients aren't able to associate). Unfortunately there seems to be no configuration
-option to disable the use of the monitor interface. To deal with this problem, I recommend to bring
-up a Monitor interface, before starting hostapd. In result hostapd isn't able to add a second
-monitor interface and fails over to the normal behavior. The established monitor interface could
-be used afterwards, but is of course bound to the channel use by hostapd. The additional interface
-could be added with standard commands (e.g `iw phy phyNN interface add mon0 type monitor` or 
-`airmon-ng start wlanNN`) while usin `nexutil -m7` or by using `nexutil -m6`. The latter adds a monitor
-interface by default.
-2. **hostapd-mana** behaves differently: If a monitor interface is already present, the AP works as intended
-(same as legacy hostapd). But the karma attack (`enable_mana=1`) doesn't work without a dedicated monitor
-interface exclusivly available for hostapd-mana. So this time it has to be done the other way around:
-In order to bring up a Karma capable AP, there mustn't already exist a monitor interface when starting
-hostapd. This could be achieved by using `nexutil -m7` without adding the monitor interface. When
-hostapd-mana is launched, the monitor interface is brought up automatically (and removed when hostapd is 
-stopped). Frames with client probes could only be fetched and used to create the corresponding beacons
-if hostapd-mana has spawned the needed monitor interface. Again, there seems to be no configuration
-option to tell hostapd to use a pre-existing monitor interface for this purpose.
+2. For the other operation mode, hostapd doesn't need a dedicate monitor/
+injection interface in addition to the needed AP interface (note: we are 
+talking about multiple virtual interfaces on a single physical interface).
+Instead the interface firmware/driver handles the station management and
+communicates relevant events via callbacks to hostapd. 
 
-### Sumarry
+### Example for clarification - Association Request:
 
-In order to reliably use legacy hostapd, a monitor interface should already be up before starting it.
-In order to reliably use hostapd-mana, there mustn't be a monitor interface up before starting it (but 
-adding one has to be allowed - `nexutil -m7`).
+I "mode 1" hostapd receives an association request as management frame
+from the virtual monitor interface. If the station is allowed to associate,
+a management frame with an asociation response is sent back via the same 
+virtual interface (injection). Hostapd is now able to handle the associated 
+station in its internal data structures and communication is done via the 
+second virtual interface, which works in AP mode instead of monitor mode.
+
+In "mode 2" the association frame is handled in the firmware of the WiFi
+interface and hostapd is informed about the association via an event.
+
+### What does this mean for the AP enabled nexmon firmware in conjuction with hostapd ?
+
+When hostapd is started, the following thing happen:
+
+**Step 1:** Check if WiFi interface supports Full Station Management in hardware ("mode 2").
+If yes, bring up the AP in this mode else continue with next step!
+
+**Step 2:** Try to bring up a monitor interface. If it works, bring up the AP in "mode 1",
+else continue with next step.
+
+**Step 3:** If neither one worked, fail over to "mode 2", bring up the AP and try to
+let the hardware handle the station management, although the interface reported 
+that it doesn't support this mode of operation.
+
+
+Now, the legacy firmware for the BCM43430a1 handles Station Management in
+hardware, but doesn't report this capability. This again means, that hostapd
+runs through all 3 steps described above and ends up in the failover for
+"mode 2".
+
+The important part is, that the legacy driver reports "Erro Operation not
+supported", when hostapd tries to bring up the monitor interface in step 2.
+This again leads to the failover and everything works as intended.
+
+With the "monitor enabled" patched nexmon firmware, this of course changes.
+Now hostapd is able to bring up the monitor interface and tries to work 
+in "mode 1". This works for communication of probe request/response and
+authentication frames, but when it comes to association (which hostapd
+tries to handle internally and inform the driver about its doings) it 
+fails, because the firmware isn't aware of the station which tries to 
+associate (because the firmware hasn't handle probing and authentication 
+itself). This ultimately results in a disassociation, send by the firmware.
+This again means, no station could connect to the spawned AP.
+
+To overcome this issue, the brcmfmac driver has been modified in a manner
+to report "error operation not supported" if the userland part tries to add
+a monitor interface, but there's already a monitor interface up. This
+exactly mimics the behavior of the umodified driver/firmware and leads
+to the failover step 3 described above. **So the only thing which has to
+be done in order to make hostapd work, is to bring up a monitor interface
+before starting hostapd**. The nice thing about this, is that the monitor
+interface could be used, while the AP is up and running. There's one logical
+restriction with that: The channel of course couldn't be changed, hwen the 
+AP is up.
+	
+## Hardware based KARMA attack (experimental, likely to change)
+
+### TL;TR
+
+To make KARMA work the following steps have to be done:
+
+1. Bring up a monitor interface and afterwards a hostapd based **OPEN** 
+access point (steps describe above)
+2. Issue `nexutil -s 666 -i -v 1` to enable KARMA for the running access point
+
+To disable the karma mode `nexutil -s 666 -i -v 0` could be issued, there's
+no need to stop the AP. KARMA could be enabled or disabled on-demand.
+
+If everything works, every probe request for a fromer unknwon network
+should be responded to properbly and the client is magically allowed to
+connect to the AP (which effectively doesn't exist).
+
+Of course the AP hasn't got to use "OPen Authentication System", but
+this attacks doesn't make to much sense with an AP forcing authentication.
+
+### Details on implementation
+
+The initial idea was to use hostapd-mana by Sensepost (greetings to Dominic,
+who would have allowed to use a precompiled version). Unfortunately this
+didn't work out. The reason is partially deascribe above: hostapd couldn't
+work in the operation mode, where it uses a dedicated monitor interface for
+station handling. But, the KARMA patches of hostapd use exactly this monitor
+interface (with injection capabilities) to carry out the attack, which
+couldn't be made available to hostapd with the bcm43430a1 firmware.
+
+There have been two options to overcome this:
+
+1. Modify the complete driver/firmware stack of BCM43430a1 to emulate
+the behavior of a WiFi interface which handles Station Management in software
+("emulation" is the wrong word, as in fact one needs to implement station
+management in software).
+
+2. Reverse the Firmware, use nexmon framework to modify it and let the
+hardware do the job.
+
+To make a long story short (and avoid more TL;TR), option 2 was chosen.
+You find the result in this repo as precompiled firmware + driver.
+Everything is highly experimental, not widely tested and undergoing changes
+(especially when it comes to debug output to the chips internal console).
+
+There are some ToDo's, like allow beaconing for seen probes (the `mana_loud`
+option in hostapd-mana).
+
+For now only probe responses for seen requests are transmitted (and of course
+association is handled correctly). As this is a firmware patch, everything
+runs in hardware and thus - let's say - a bit faster than with hostapd-mana:
+Probe requests are responded immediately (at least when I get rid of the
+throttling debug prints to the internal console).
+
+The main ToDo is to integrate everything into P4wnP1.
+
+## Shout out
+
+In case somebody is working on a similar project, I'd be happy to see
+a mod where the chip could be used to run in station mode and KARMA-enabled
+AP mode at the same time.
+Why ? Because this would allow to use a single chip for an upstream WiFi 
+internet connection, while a KARMA Access Point is running ... and
+hey, maybe it could be ported to Mobile Phones ;-)
