@@ -276,49 +276,49 @@ class MaMe82_IO:
 		if len(ssid) > 32:
 			print "SSID too long, 32 chars max"
 			return
-		ioctl_addssid = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II{0}s".format(len(ssid)), MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ADD_CUSTOM_SSID, len(ssid), ssid), True)
+		ioctl_addssid = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("II{0}s".format(len(ssid)), MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ADD_CUSTOM_SSID, len(ssid), ssid), True)
 		nexconf.sendNL_IOCTL(ioctl_addssid)
 	
 	@staticmethod
 	def set_enable_karma_probe(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 	
 	@staticmethod	
 	def set_enable_karma_assoc(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
 	def set_enable_karma_beaconing(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
 	def set_enable_karma(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
 	def clear_custom_ssids():
-		ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS, 0), True)
+		ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
 	def clear_karma_ssids():
-		ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS, 0), True)
+		ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 			
 
