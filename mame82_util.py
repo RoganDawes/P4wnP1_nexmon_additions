@@ -17,6 +17,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with P4wnP1.  If not, see <http://www.gnu.org/licenses/>.
 
+
+# The python classes are used to configure the MaMe82 nexmon firmware mod
+# while an access point is up and running
+
 import fcntl
 import socket
 import os
@@ -253,14 +257,90 @@ class nexconf:
 		fcntl.ioctl(s.fileno(), SIOCDEVPRIVATE, ifr)
 		s.close()		
 		
+class MaMe82_IO:
+	CMD=666
+	
+	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE = 1
+	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC = 2
+	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA = 3
+	MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON = 4
+	MAME82_IOCTL_ARG_TYPE_SET_KARMA_BEACON_AUTO_REMOVE = 5
+	MAME82_IOCTL_ARG_TYPE_SET_BEACON_AUTO_REMOVE = 6
+	MAME82_IOCTL_ARG_TYPE_ADD_CUSTOM_SSID = 7
+	MAME82_IOCTL_ARG_TYPE_DEL_CUSTOM_SSID = 8
+	MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS = 9
+	MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS = 10
+
+	@staticmethod
+	def add_custom_ssid(ssid):
+		if len(ssid) > 32:
+			print "SSID too long, 32 chars max"
+			return
+		ioctl_addssid = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II{0}s".format(len(ssid)), MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ADD_CUSTOM_SSID, len(ssid), ssid), True)
+		nexconf.sendNL_IOCTL(ioctl_addssid)
+	
+	@staticmethod
+	def set_enable_karma_probe(on=True):
+		if on:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 1), True)
+		else:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_PROBE, 1, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+	
+	@staticmethod	
+	def set_enable_karma_assoc(on=True):
+		if on:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 1), True)
+		else:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_ASSOC, 1, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
 		
+	@staticmethod	
+	def set_enable_karma_beaconing(on=True):
+		if on:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 1), True)
+		else:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA_BEACON, 1, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+		
+	@staticmethod	
+	def set_enable_karma(on=True):
+		if on:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 1), True)
+		else:
+			ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("IIB", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_ENABLE_KARMA, 1, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+		
+	@staticmethod	
+	def clear_custom_ssids():
+		ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+		
+	@staticmethod	
+	def clear_karma_ssids():
+		ioctl = nexconf.create_cmd_ioctl(MAME82_IO.CMD, struct.pack("II", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS, 0), True)
+		nexconf.sendNL_IOCTL(ioctl)
+			
 
-### Send ioctl comand via netlink: test of set (cmd 666, value 1) ######
+MaMe82_IO.set_enable_karma(True) # send probe responses and association responses for foreign SSIDs
+MaMe82_IO.set_enable_karma_beaconing(True) # send beacons for SSIDs seen in probe requests
 
-# create IOCTLs to enable/disable KARMA
-ioctl_KARMA_ON = nexconf.create_cmd_ioctl(666, struct.pack("I", 1), True)
-ioctl_KARMA_OFF = nexconf.create_cmd_ioctl(666, struct.pack("I", 0), True)
-nexconf.sendNL_IOCTL(ioctl_KARMA_ON)
+### send ioctl to add custom SSIDs (which are beaconed indepedent of spotted probes)
+MaMe82_IO.add_custom_ssid("linksys")
+MaMe82_IO.add_custom_ssid("NETGEAR")
+MaMe82_IO.add_custom_ssid("dlink")
+MaMe82_IO.add_custom_ssid("AndroidAP")
+MaMe82_IO.add_custom_ssid("default")
+MaMe82_IO.add_custom_ssid("cablewifi")
+MaMe82_IO.add_custom_ssid("asus")
+MaMe82_IO.add_custom_ssid("Guest")
+MaMe82_IO.add_custom_ssid("Telekom")
+MaMe82_IO.add_custom_ssid("xerox")
+MaMe82_IO.add_custom_ssid("tmobile")
+MaMe82_IO.add_custom_ssid("Telekom_FON")
+MaMe82_IO.add_custom_ssid("freifunk")
+
+
 
 ### Send ioctl comand via netlink: test of GET (cmd 262, value 'bsscfg:ssid' in a buffer large enough to receive the response) ######
 

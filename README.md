@@ -26,6 +26,15 @@ Having the monitor + injection capable interface up, means tools like airodump-n
 P4wnP1 is licensed GNU General Public License v3.0, source code is here:
 https://github.com/mame82/P4wnP1
 
+
+## Important note:
+
+In current firmware version the ioctls have been changed. This means instead of nexutil it is recommend
+to use the code of `mame82_util.py` to change the KARMA settings. The advantage is that this could be done while an
+hostapd AP is running (and only than), with commands dedicated to the new Firmware settings
+(add custom SSIDs, enable KARMA beaconing a.k.a MANA_LOUD or disable everything on-demand).
+The docs get updated on this, as soon as the firmware mod is done.
+
 ## Access Point mode with hostapd
 
 ### TL;TR 
