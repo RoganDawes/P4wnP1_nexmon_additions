@@ -4,7 +4,7 @@ This repository is part of the P4wnP1 project and holds pre-compiled Nexmon bina
 
 Nexmon by [@seemoo-lab](https://github.com/seemoo-lab) (NexMon Team) is licensed under GNU General Public License v3.0. The sources used to compile could be found here:
 ~ ~https://github.com/seemoo-lab/nexmon/tree/934c7066819913687742aba217a1d75b98c1d883~ ~
-https://github.com/mame82/nexmon/tree/b358fa97c2679ccc664930da4a3bdc6408ad8409
+https://github.com/mame82/nexmon/tree/bcm43430a1_KARMA
 
 Custom source is used, till merged into nexmon main RePo. This adds in KARMA attack + AP support while having a monitor interface up.
 
@@ -30,7 +30,7 @@ https://github.com/mame82/P4wnP1
 ## Important note:
 
 In current firmware version the ioctls have been changed. This means instead of nexutil, it is recommend
-to use the code of `mame82_util.py` to change the KARMA settings. The advantage is: every firmware option could
+to use the code of `karmatool.py` to change the KARMA settings. The advantage is: every firmware option could
 be changed, while a hostapd Access Point is running (and only if hostapd is running).
 This allows adding custom SSIDs, enable KARMA beaconing a.k.a MANA_LOUD or disable everything ON-DEMAND !
 The docs get updated on this, as soon as the firmware mod is done.
@@ -125,18 +125,59 @@ AP is up.
 
 To make KARMA work the following steps have to be done:
 
+0. Install the provided firmware `brcmfmac43430-sdio.bin` and driver `brcmfmac.ko`
 1. Bring up a monitor interface and afterwards a hostapd based **OPEN** 
 access point (steps describe above)
-2. Issue ~ `nexutil -s 666 -i -v 1` ~  (outdated) to enable KARMA for the running access point
+2. Run `karmatool.py`  to change the firmware configuration (including KARMA,
+custom SSIDs etc) as needed **while the AP is running**
 
-To disable the karma mode ~ `nexutil -s 666 -i -v 0` ~ could be issued, there's
-no need to stop the AP. KARMA could be enabled or disabled on-demand.
+To simply enable KARMA use `karmatool.py -k 1`
 
-If everything works, every probe request for a fromer unknwon network
-should be responded to properbly and the client is magically allowed to
+```
+Usage:      python karmatool.py [Arguments]
+
+Arguments:
+   -h                   Print this help screen
+   -i                   Interactive mode
+   -d                   Load default configuration (KARMA on, KARMA beaconing off, 
+                        beaconing for 13 common SSIDs on, custom SSIDs never expire)
+   -c                   Print current KARMA firmware configuration
+   -p 0/1               Disable/Enable KARMA probe responses
+   -a 0/1               Disable/Enable KARMA association responses
+   -k 0/1               Disable/Enable KARMA association responses and probe responses
+                        (overrides -p and -a)
+   -b 0/1               Disable/Enable KARMA beaconing (broadcasts up to 20 SSIDs
+                        spotted in probe requests as beacon)
+   -s 0/1               Disable/Enable custom SSID beaconing (broadcasts up to 20 SSIDs
+                        which have been added by the user with '--addssid=' when enabled)
+   --addssid="test"     Add SSID "test" to custom SSID list (max 20 SSIDs)
+   --remssid="test"     Remove SSID "test" from custom SSID list
+   --clearssids         Clear list of custom SSIDs
+   --clearkarma         Clear list of karma SSIDs (only influences beaconing, not probes)
+   --autoremkarma=600   Auto remove KARMA SSIDs from beaconing list after sending 600 beacons
+                        without receiving an association (about 60 seconds, 0 = beacon forever)
+   --autoremcustom=3000    Auto remove custom SSIDs from beaconing list after sending 3000
+                        beacons without receiving an association (about 5 minutes, 0 = beacon
+                        forever)
+   
+Example:
+   python karmatool.py -k 1 -b 0    Enables KARMA (probe and association responses)
+                                    But sends no beacons for SSIDs from received probes
+   python karmatool.py -k 1 -b 0    Enables KARMA (probe and association responses)
+                                    and sends beacons for SSIDs from received probes
+                                    (max 20 SSIDs, if autoremove isn't enabled)
+   
+   python karmatool.py --addssid="test 1" --addssid="test 2" -s 1
+                                    Add SSID "test 1" and "test 2" and enable beaconing for
+                                    custom SSIDs
+```
+
+
+If everything works, every probe request for a former unknwon network
+should be respond properbly and the client is magically allowed to
 connect to the AP (which effectively doesn't exist).
 
-Of course the AP hasn't got to use "OPen Authentication System", but
+Of course the AP hasn't got to use "Open Authentication System", but
 this attacks doesn't make to much sense with an AP forcing authentication.
 
 ### Details on implementation
@@ -164,7 +205,7 @@ You find the result in this repo as precompiled firmware + driver.
 Everything is highly experimental, not widely tested and undergoing changes
 (especially when it comes to debug output to the chips internal console).
 
-There are some ToDo's, like allow beaconing for seen probes (the `mana_loud`
+~ ~There are some ToDo's, like allow beaconing for seen probes (the `mana_loud`
 option in hostapd-mana).
 
 For now only probe responses for seen requests are transmitted (and of course
@@ -173,7 +214,15 @@ runs in hardware and thus - let's say - a bit faster than with hostapd-mana:
 Probe requests are responded immediately (at least when I get rid of the
 throttling debug prints to the internal console).
 
-The main ToDo is to integrate everything into P4wnP1.
+The main ToDo is to integrate everything into P4wnP1.~ ~
+
+Current version allows sending beacons for seen probes (KARMA LOUD).
+Additionally custom SSIDs could be added for beaconing and both,
+karma and custom SSIDs, could automatically be removed if no association
+request is received (user defined timeout).
+
+Custom and KARMA SSIDs for beaoning are limited to 20, each. Probe and 
+association responses are send back without such a limit.
 
 ## Shout out
 
