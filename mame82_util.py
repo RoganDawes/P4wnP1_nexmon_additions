@@ -27,6 +27,11 @@ import os
 from ctypes import *
 import struct
 
+class struct_mame82_deauth_arg(Structure):
+	_fields_ = [("da", c_ubyte*6),
+				("bssid", c_ubyte*6),
+				("reason", c_ushort)]
+
 class struct_ssid_list(Structure):
 	# we define the fields afterwards to allow creating a pointer to this struct
 	# which only is declared here (no fields defined so far)
@@ -98,6 +103,12 @@ class struct_nexudp_ioctl_hdr(Structure):
 				("set", c_uint),
 				("payload", c_byte * 1)]
 
+
+def mac2bstr(mac):
+	res = ""
+	for v in mac.split(":"):
+		res += chr(int(v,16))
+	return res
 
 class nexconf:
 	NLMSG_ALIGNTO = 4
@@ -320,6 +331,7 @@ class MaMe82_IO:
 	MAME82_IOCTL_ARG_TYPE_CLEAR_CUSTOM_SSIDS = 9
 	MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS = 10
 	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_CUSTOM_BEACONS = 11
+	MAME82_IOCTL_ARG_TYPE_SEND_DEAUTH = 20
 	
 	MAME82_IOCTL_ARG_TYPE_GET_CONFIG = 100
 	MAME82_IOCTL_ARG_TYPE_GET_MEM = 101
@@ -328,6 +340,28 @@ class MaMe82_IO:
 	def s2hex(s):
 		return "".join(map("0x%2.2x ".__mod__, map(ord, s)))
 
+	@staticmethod
+	def send_deauth(bssid, da="ff:ff:ff:ff:ff:ff", reason=0x0007):
+		arr_bssid = mac2bstr(bssid)
+		arr_da = mac2bstr(da)
+		
+		buf = struct.pack("<II6s6sH", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SEND_DEAUTH, sizeof(struct_mame82_deauth_arg), arr_da, arr_bssid, reason)
+		print repr(buf)
+		
+		ioctl_addssid = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, buf, True)
+		nexconf.sendNL_IOCTL(ioctl_addssid)
+
+	@staticmethod
+	def set_ch(channel):
+		ioctl = nexconf.create_cmd_ioctl(30, struct.pack("<I", channel), True)
+		res = nexconf.sendNL_IOCTL(ioctl)
+
+	@staticmethod
+	def get_ch():
+		ioctl = nexconf.create_cmd_ioctl(29, "", False)
+		res = nexconf.sendNL_IOCTL(ioctl)
+		return struct.unpack("<I", res[:4])[0]
+	
 	@staticmethod
 	def add_custom_ssid(ssid):
 		if len(ssid) > 32:
