@@ -27,6 +27,10 @@ import os
 from ctypes import *
 import struct
 
+class struct_mame82_probe_resp_arg(Structure):
+	_fields_ = [("da", c_ubyte*6),
+				("bssid", c_ubyte*6)]
+		
 class struct_mame82_deauth_arg(Structure):
 	_fields_ = [("da", c_ubyte*6),
 				("bssid", c_ubyte*6),
@@ -178,9 +182,25 @@ class nexconf:
 		c = cast(nlh, c_void_p)
 		c.value += nexconf.NLMSG_LENGTH(0) # inc is only possible for void ptr, we don't need to cast to char first as incrementation is done in single bytes (by adding to value)
 		return c
+
+	@staticmethod
+	def openNL_sock():
+		try:
+			s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, nexconf.NETLINK_USER)
+		except socket.error:
+			print "No Netlink IOCTL connection possible"
+			return None
+
+		# bind to kernel
+		s.bind((os.getpid(), 0))
+		
+		return s
+		
+	def closeNL_sock(s):
+		s.close()
 	
 	@staticmethod	
-	def sendNL_IOCTL(ioc, debug=False, rawresult=False):
+	def sendNL_IOCTL(ioc, debug=False, rawresult=False, nl_socket_fd=None):
 		### NETLINK test ####
 		
 		if debug:
@@ -232,17 +252,20 @@ class nexconf:
 		print repr(buffer(frame.contents)[:])
 		'''
 
-		
-		try:
-			s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, nexconf.NETLINK_USER)
-		except socket.error:
-			print "No Netlink IOCTL connection possible"
-			return None
+		sfd = None
+		s = None
+		if nl_socket_fd == None:
+			try:
+				s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, nexconf.NETLINK_USER)
+			except socket.error:
+				print "No Netlink IOCTL connection possible"
+				return None
 
-		# bind to kernel
-		s.bind((os.getpid(), 0))
-		sfd = os.fdopen(s.fileno(), 'w+b')
-
+			# bind to kernel
+			s.bind((os.getpid(), 0))
+			sfd = os.fdopen(s.fileno(), 'w+b')
+		else:
+			sfd = nl_socket_fd
 
 		sfd.write(bstr)
 		sfd.flush()
@@ -287,8 +310,9 @@ class nexconf:
 			#return only payload part of res frame
 			ret = payload
 
-		sfd.close()
-		s.close()
+		if nl_socket_fd == None:
+			sfd.close()
+			s.close()
 		
 		return ret
 
@@ -332,6 +356,7 @@ class MaMe82_IO:
 	MAME82_IOCTL_ARG_TYPE_CLEAR_KARMA_SSIDS = 10
 	MAME82_IOCTL_ARG_TYPE_SET_ENABLE_CUSTOM_BEACONS = 11
 	MAME82_IOCTL_ARG_TYPE_SEND_DEAUTH = 20
+	MAME82_IOCTL_ARG_TYPE_SEND_PROBE_RESP = 21
 	
 	MAME82_IOCTL_ARG_TYPE_GET_CONFIG = 100
 	MAME82_IOCTL_ARG_TYPE_GET_MEM = 101
@@ -341,6 +366,46 @@ class MaMe82_IO:
 		return "".join(map("0x%2.2x ".__mod__, map(ord, s)))
 
 	@staticmethod
+	def send_probe_resp(bssid, da="ff:ff:ff:ff:ff:ff", ie_ssid_data="TEST_SSID", ie_vendor_data=None):
+		arr_bssid = mac2bstr(bssid)
+		arr_da = mac2bstr(da)
+		
+		ie_ssid_type = 0
+		ie_ssid_len = 32
+		ie_vendor_type = 221
+		ie_vendor_len = 238
+		
+		buf = ""
+		
+		if ie_vendor_data == None:
+			buf = struct.pack("<II6s6sBB32s", 
+				MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SEND_PROBE_RESP, 
+				48, # 6 + 6 + 1 + 1 +32 + 1 + 1 + 238
+				arr_da, 
+				arr_bssid,
+				ie_ssid_type,
+				ie_ssid_len,
+				ie_ssid_data)
+		else:
+			buf = struct.pack("<II6s6sBB32sBB238s", 
+				MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SEND_PROBE_RESP, 
+				286, # 6 + 6 + 1 + 1 +32 + 1 + 1 + 238
+				arr_da, 
+				arr_bssid,
+				ie_ssid_type,
+				ie_ssid_len,
+				ie_ssid_data,
+				# insert additional IEs here
+				ie_vendor_type,
+				ie_vendor_len,
+				ie_vendor_data)
+		
+		#print repr(buf)
+		
+		ioctl_sendprbrsp = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, buf, True)
+		nexconf.sendNL_IOCTL(ioctl_sendprbrsp)
+		
+	@staticmethod
 	def send_deauth(bssid, da="ff:ff:ff:ff:ff:ff", reason=0x0007):
 		arr_bssid = mac2bstr(bssid)
 		arr_da = mac2bstr(da)
@@ -348,8 +413,8 @@ class MaMe82_IO:
 		buf = struct.pack("<II6s6sH", MaMe82_IO.MAME82_IOCTL_ARG_TYPE_SEND_DEAUTH, sizeof(struct_mame82_deauth_arg), arr_da, arr_bssid, reason)
 		print repr(buf)
 		
-		ioctl_addssid = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, buf, True)
-		nexconf.sendNL_IOCTL(ioctl_addssid)
+		ioctl_senddeauth = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, buf, True)
+		nexconf.sendNL_IOCTL(ioctl_senddeauth)
 
 	@staticmethod
 	def set_ch(channel):
