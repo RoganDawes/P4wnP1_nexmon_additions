@@ -48,6 +48,7 @@ class Packet:
 	CTLM_TYPE_CON_INIT_REQ2 = 3
 	CTLM_TYPE_CON_INIT_RSP2 = 4
 	CTLM_TYPE_CON_RESET = 5
+	CTLM_TYPE_CON_RESET_RESP = 6
 	
 	PAY1_MAX_LEN = 28
 	PAY2_MAX_LEN = 236
@@ -81,6 +82,24 @@ class Packet:
 		self.ack = 0
 		self.FlagControlMessage = False # If set, the payload contains a control message, pay1[0] is control message type
 		self.ctlm_type = 0
+
+	@staticmethod
+	def generateResetPacket(req, srvID, seq=-1):
+		# type: (Packet,int,int) -> Packet
+		
+		resp = Packet()
+		resp.da = req.sa
+		resp.pay1 = chr(Packet.CTLM_TYPE_CON_RESET) #+ self.clientIVBytes
+		resp.FlagControlMessage = True
+		resp.ctlm_type = Packet.CTLM_TYPE_CON_RESET
+		if seq == -1:
+			resp.seq = (req.ack + 1) & 0x0F
+		else:
+			resp.seq = seq & 0xF
+		resp.srvID = srvID
+		resp.ack = req.seq
+		resp.clientID =	req.clientID
+		return resp
 
 	@staticmethod
 	def parse2packet(sa, da, raw_ssid_data, raw_ven_ie_data=None):
@@ -235,12 +254,19 @@ class ConnectionQueue:
 			self.__available_client_IDs.insert(0, ID+1)
 		self.max_connections = max_connections
 		
-	def __handleConnectionStateChange(self, con, oldstate, newstate):
-		logging.debug("Connection clientID {0}, old state: {1}, new state {2}".format(con.clientID, oldstate, newstate))
+	def __handleConnectionStateChange(self, csock, oldstate, newstate):
+		# type: (ClientSocket, int, int)
+		
+		logging.debug("Connection clientID {0}, old state: {1}, new state {2}".format(csock.clientID, oldstate, newstate))
 		
 		if newstate == ClientSocket.STATE_PENDING_ACCEPT or oldstate == ClientSocket.STATE_PENDING_ACCEPT:
 			# Trigger event when a connection enters or leaves pending_accept state
 			self.__wait_accept_state_change.set()
+			
+		if newstate == ClientSocket.STATE_CLOSE:
+			print("State transfer to CLOSE for Client ID: {0}, IV: {1}".format(csock.clientID, csock.clientIV))
+			# remove connection from queue
+			self.__queued_connections.remove(csock)
 			
 	def waitForPendingAcceptStateChange(self):
 		while not self.__wait_accept_state_change.isSet():
@@ -315,6 +341,7 @@ class ClientSocket(object):
 		self.clientSocket = None
 		self.__in_queue = Queue.Queue()
 		self.__out_queue = Queue.Queue()
+		self.__out_queue_ctlm = Queue.Queue()
 
 	@property
 	def state(self):
@@ -370,11 +397,21 @@ class ClientSocket(object):
 		
 		return buf
 
-	# note: block parameter is currently always assume to be True
+	
+	def sendCtlMessage(self, ctlm_type, data):
+		self.__pushOutboundCtrlMsg(ctlm_type, data[:self.mtu])
+
+	# note: block parameter is currently always assumed to be True
 	def send(self, string, block=True):
 		for off in range(0, len(string), self.mtu):
 			chunk = string[off:off+self.mtu]
 			self.__pushOutboundData(chunk)
+
+	def __pushOutboundCtrlMsg(self, ctlm_type, data, block=True):
+		# ToDo: check if valid ctlm_type
+		payload = chr(ctlm_type) + data
+		logging.debug("Pushing controlmessage type: {0}, outdata {1}".format(ctlm_type, data))
+		self.__out_queue_ctlm.put(data, block=block)	
 
 	def __pushOutboundData(self, data, block=True):
 		logging.debug("Pushing outdata {0}".format(data))
@@ -386,12 +423,32 @@ class ClientSocket(object):
 		else:
 			return ""
 		
+	def disconnect(self):
+		self.sendCtlMessage(Packet.CTLM_TYPE_CON_RESET, "")
+		self.state = ClientSocket.STATE_CLOSE
+		
 	def hasInData(self):
 		# type: () -> bool
 		return self.__in_queue.qsize() > 0
 	
 	def handleRequest(self, req):
 		# type: (Packet) -> Packet
+		
+		
+		# cases for connection reset (disconnect):
+		# 1) Everytime a client tries to connect (has to be handled in ServerSocket.handle_request)
+		#	1.1) delete all client_sockets in state CLOSE
+		#	1.2) If no socket deleted: transfer oldest* client_socket in state PENDING_OPEN to CLOSE + send reset
+		#	1.4) If no socket transfered to CLOSE: transfer *oldest client_socket in state PENDING_ACCEPT to CLOSE + send reset
+		# *oldest refers to duration since last data was received
+		# 2) DONE: req.ctlm_type == Packet.CTLM_TYPE_CON_INIT_REQ1 and (socket.state not CLOSE or PENDING_OPEN)
+		# 3) DONE: req.ctlm_type == Packet.CTLM_TYPE_CON_INIT_REQ2 and (state not (PENDING_ACCEPT or (OPEN with las_rx_packet==INIT_REQ2))
+		# 4) req.clientID isn't in use, but req.srvID is correct (has to be handled in ServerSocket.handle_request, happens when client continues sending after server restart)
+		# 5) req.seq is out of order (!= last_rx_packet.seq and != last_rx_packet.seq+1)
+		#	--> possible double usage of ClientID, but as the current implementation doesn't allow out-of-order seq (ping pong communication),
+		#	we could directly send a reset, which allows the client to re-initiate and receive a new client ID
+		# 6) req.ctlm_type == Packet.CTLM_TYPE_CON_RESET: send back CON_RESET_RESP and set state to CLOSE
+		# 7) user triggered (called disconnect)
 		
 		#### CTLM handling ######
 		if req.ctlm_type == Packet.CTLM_TYPE_CON_INIT_REQ1:
@@ -435,9 +492,12 @@ class ClientSocket(object):
 				logging.debug("Stage 1 init request of this client already added, sending stored response ...")
 				return self.tx_packet
 			else:
-				printf("Invalid socket state {0} for CTLM_TYPE_CON_INIT_REQ1".format(self.state))
-				# ToDo: send reset
-				return None
+				print("Invalid socket state {0} for CTLM_TYPE_CON_INIT_REQ1".format(self.state))
+				resp= Packet.generateResetPacket(req, self.srvID, seq=1)
+				self.tx_packet = resp
+				self.last_rx_packet = req
+				self.state = ClientSocket.STATE_PENDING_CLOSE
+				return self.tx_packet
 		elif req.seq == 2 and req.ctlm_type == Packet.CTLM_TYPE_CON_INIT_REQ2:
 			if self.state == ClientSocket.STATE_PENDING_OPEN:
 				print("InReq2 from ClientID {0} ...".format(req.clientID))
@@ -481,8 +541,12 @@ class ClientSocket(object):
 				return self.tx_packet			
 			else:
 				logging.debug("Invalid socket state {0} for CTLM_TYPE_CON_INIT_REQ2".format(self.state))
-				# ToDo: send reset
-				return None				
+				resp= Packet.generateResetPacket(req, self.srvID, seq=2)
+				self.tx_packet = resp
+				self.last_rx_packet = req
+				self.state = ClientSocket.STATE_PENDING_CLOSE
+				return self.tx_packet
+						
 		
 		#### data handling ######
 		
@@ -522,9 +586,16 @@ class ClientSocket(object):
 				self.tx_packet.seq += 1
 				self.tx_packet.seq &= 0x0F # modulo 16
 								
-				# pop data from out_queue and update payload NOTE: data from queue should always be <= self.mtu
+				
 				outdata = ""
-				if self.__out_queue.qsize() > 0:
+				
+				# before we send data, we check if we have pending outbound control messages (priority)
+				self.tx_packet.FlagControlMessage = False # only true if ctlm (false for empty heartbeat od data)
+				if self.__out_queue_ctlm.qsize() > 0:
+					outdata = self.__pushOutboundCtrlMsg.get()
+					self.tx_packet.FlagControlMessage = True
+				# pop data from out_queue and update payload NOTE: data from queue should always be <= self.mtu
+				elif self.__out_queue.qsize() > 0:
 					outdata = self.__out_queue.get()
 				
 				logging.debug("sending outdata: {0}".format(outdata))
@@ -805,6 +876,7 @@ class ServerSocket:
 		
 
 	def sendResponse(self, resp):
+		# type: (Packet) -> None
 		if len(resp.sa) == 0:
 			resp.sa = "de:ad:be:ef:13:37" # ToDo: randomize bssid/sa
 		ServerSocket.__send_probe_resp_to_driver(resp.sa, resp.da, resp.generateRawSsid(False), resp.generateRawVenIe(False))
@@ -815,13 +887,7 @@ class ServerSocket:
 		
 		q = self.__connection_queue
 		
-		# check if stage1 connection init request (SSID_payload with random 4 byte IV, clientId 0, seq 1)
-		########################################
-		# - pending stage1 requests are handled in __connection_queue_stage1
-		# - as soon as a corresponding and valid stage2 request is received, the client is moved over
-		# to accept queue (represented by a new socket and assigned clientId)
-		# - the stage2 response is sent by the accept() method
-		# - the stage1 response is sent by the listen method 
+		# handle CON_INIT_REQ1 for clients without ID or forward repeated CON_INIT_REQ1 to correct client socket
 		if req.ctlm_type == Packet.CTLM_TYPE_CON_INIT_REQ1 and req.seq == 1:
 			# the very first connection (Packet.CTLM_TYPE_CON_INIT_REQ1) request couldn't be handled by a client socket, as no one does exist
 			# this is only true for the first probe request of this kind (we get them in bulks, with repetitions)
@@ -867,8 +933,10 @@ class ServerSocket:
 					logging.debug("Clientsocket has no response for following request")
 					req.print_out()
 			else:
-				logging.debug("No target socket for following request")
+				print("No target socket for following request from clientID {0}, sending reset...".format(req.clientID))
 				req.print_out()
+				resp = Packet.generateResetPacket(req, self.srvID)
+				self.sendResponse(resp)
 				
 		
 	
@@ -961,12 +1029,14 @@ class Server(cmd.Cmd):
 			self.serv_socket.unbind()	
 
 	def __check_for_clientID(self,  clientID):
+		# type: (int)  -> bool
 		for c in self.client_socks:
 			if c.clientID == clientID:
 				return True
 		return False
 	
 	def __get_client_sock_by_ID(self,  clientID):
+		# type: (int)  -> clientSocket
 		for c in self.client_socks:
 			if c.clientID == clientID:
 				return c
@@ -980,7 +1050,7 @@ class Server(cmd.Cmd):
 			return
 		
 		interact = True
-	
+		print("Start interacting with remote process of client {0} ... Press <CTRL+C> for menu".format(clientID))
 		while interact:
 			try:
 				if select([sys.stdin], [], [], 0.05)[0]: # 50 ms timeout, to keep CPU load low
@@ -996,7 +1066,7 @@ class Server(cmd.Cmd):
 				print("\t1: Background the session")
 				print("\t2: Clear in- and outqueue (long output pending)")
 				print("\t3: Restart the shell (not responsive)")
-				print("\t4: Restart the client (restart shell doesn't help)")
+				print("\t4: Restart the client (restart shell didn't help)")
 				print("\t5: Exit the client (Warning: client won't connect back again)")
 				print("\t0: Continue interaction")
 				
@@ -1022,6 +1092,11 @@ class Server(cmd.Cmd):
 					pass
 				elif selection == 1:
 					interact = False
+					continue
+				elif selection == 4:
+					interact = False
+					cs.disconnect()
+					continue			
 				else:
 					# ToDo
 					print("Option not implemented")
