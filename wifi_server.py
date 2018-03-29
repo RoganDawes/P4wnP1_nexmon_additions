@@ -56,7 +56,7 @@ class Packet:
 	CON_RESET_REASON_UNSPECIFIED = 0
 	CON_RESET_REASON_INVALID_CLIENT_ID = 1 
 
-	PAY1_MAX_LEN = 28
+	PAY1_MAX_LEN = 27
 	PAY2_MAX_LEN = 236
 
 	# Data encoding
@@ -64,8 +64,9 @@ class Packet:
 	# SSID - 32 BYTES (pay1)
 	# ----------------------
 	# byte 0: pay1[0], if FlagControlMessage is set CTRL_TYPE
-	# byte 1..27: pay1[0..27]
-	# byte 28 ack_seq bits: 0..3 = ack, 4..7 = seq
+	# byte 1..26: pay1[0..27]
+	# byte 27 ack
+	# byte 28 seq
 	# byte 29 flag_len bits: 0 = FlagControlMessage, 1 = reserved, 2 = reserved, 3-7 = len_pay1
 	# byte 30 clientID_srvID bits: 0..3 = clientID, 4..7 = srvID
 	# byte 31 chk_pay1: 8 bit checksum
@@ -99,9 +100,9 @@ class Packet:
 		resp.FlagControlMessage = True
 		resp.ctlm_type = Packet.CTLM_TYPE_CON_RESET
 		if seq == -1:
-			resp.seq = (req.ack + 1) & 0x0F
+			resp.seq = (req.ack + 1) & 0xFF
 		else:
-			resp.seq = seq & 0xF
+			resp.seq = seq
 		resp.srvID = srvID
 		resp.ack = req.seq
 		resp.clientID =	req.clientID
@@ -118,9 +119,8 @@ class Packet:
 			pay2_len = ord(raw_ven_ie_data[236])
 			packet.pay2 = raw_ven_ie_data[:pay2_len]
 
-		ack_seq = ord(raw_ssid_data[28])
-		packet.ack = ack_seq >> 4
-		packet.seq = ack_seq & 0x0F
+		packet.ack = ord(raw_ssid_data[27])
+		packet.seq = ord(raw_ssid_data[28])
 
 		flag_len = ord(raw_ssid_data[29])
 		packet.FlagControlMessage = (flag_len & 0x80) != 0
@@ -136,15 +136,17 @@ class Packet:
 		return packet
 
 	def generateRawSsid(self, with_TL=True):
-		payload = self.pay1[:28] # truncate, ToDo: warn if payload too large
+		payload = self.pay1[:Packet.PAY1_MAX_LEN] # truncate, ToDo: warn if payload too large
 		if self.FlagControlMessage:
-			payload = chr(self.ctlm_type) + self.pay1[1:28]
+			payload = chr(self.ctlm_type) + self.pay1[1:Packet.PAY1_MAX_LEN]
 		pay_len = len(payload)
-		out = payload + (28 - pay_len) * "\x00" # pad with zeroes
+		out = payload + (Packet.PAY1_MAX_LEN - pay_len) * "\x00" # pad with zeroes
 
 		# ack_seq
-		ack_seq = (self.ack << 4) | (self.seq & 0x0F)
-		out += chr(ack_seq)
+		#ack_seq = (self.ack << 4) | (self.seq & 0x0F)
+		#out += chr(ack_seq)
+		out += chr(self.ack)
+		out += chr(self.seq)
 
 		# flag_len
 		flag_len = pay_len
@@ -338,8 +340,8 @@ class ConnectionQueue:
 
 
 class ClientSocket(object):
-	MTU_WITH_VEN_IE = 28 + 236 # 28 bytes netto SSID payload + 236 bytes netto vendor ie payload
-	MTU_WITHOUT_VEN_IE = 28
+	MTU_WITH_VEN_IE = Packet.PAY1_MAX_LEN + Packet.PAY2_MAX_LEN # 28 bytes netto SSID payload + 236 bytes netto vendor ie payload
+	MTU_WITHOUT_VEN_IE = Packet.PAY1_MAX_LEN
 
 	STATE_CLOSE = 1 # communication possible
 	STATE_PENDING_OPEN = 2 # connection init started but not done
@@ -434,7 +436,7 @@ class ClientSocket(object):
 		# ToDo: check if valid ctlm_type
 		payload = chr(ctlm_type) + data
 		logging.debug("Pushing controlmessage type: {0}, outdata {1}".format(ctlm_type, data))
-		self.__out_queue_ctlm.put(data, block=block)	
+		self.__out_queue_ctlm.put(payload, block=block)	
 
 	def __pushOutboundData(self, data, block=True):
 		logging.debug("Pushing outdata {0}".format(data))
@@ -587,11 +589,9 @@ class ClientSocket(object):
 			if self.state != ClientSocket.STATE_OPEN:
 				logging.debug("Ignored inbound data packet, as socket for client ID {0} isn't in OPEN state".format(self.clientID))
 				return None
-			# assure tx packet isn't CTLM
-			self.tx_packet.FlagControlMessage = False
-
+			
 			# check if seq has advanced
-			if req.seq == ((self.last_rx_packet.seq + 1) & 0x0F):
+			if req.seq == ((self.last_rx_packet.seq + 1) & 0xFF):
 				# new input packet, push data to in_queue
 				indata = req.pay1
 				if req.pay2 != None:
@@ -609,7 +609,7 @@ class ClientSocket(object):
 			if req.ack == self.tx_packet.seq:
 				# advance tx seq
 				self.tx_packet.seq += 1
-				self.tx_packet.seq &= 0x0F # modulo 16
+				self.tx_packet.seq &= 0xFF # modulo 256
 
 
 				outdata = ""
@@ -617,13 +617,14 @@ class ClientSocket(object):
 				# before we send data, we check if we have pending outbound control messages (priority)
 				self.tx_packet.FlagControlMessage = False # only true if ctlm (false for empty heartbeat od data)
 				if self.__out_queue_ctlm.qsize() > 0:
-					outdata = self.__pushOutboundCtrlMsg.get()
+					outdata = self.__out_queue_ctlm.get()
+					self.tx_packet.ctlm_type = ord(outdata[0])
 					self.tx_packet.FlagControlMessage = True
 				# pop data from out_queue and update payload NOTE: data from queue should always be <= self.mtu
 				elif self.__out_queue.qsize() > 0:
 					outdata = self.__out_queue.get()
 
-				logging.debug("sending outdata: {0}".format(outdata))
+				logging.debug("sending outdata in seq {1}: {0}".format(Helper.s2hex(outdata),  self.tx_packet.seq))
 
 				# THIS SHOULD NEVER HAPPEN
 				if len(outdata) > self.mtu:
@@ -653,7 +654,7 @@ class ClientSocket(object):
 
 
 class ServerSocket:
-	MAX_CONNECTIONS_LIMIT = 7 # more clients aren't allowe
+	MAX_CONNECTIONS_LIMIT = 15 # more clients aren't allowed
 	__global_firmware_event_queue = None
 	__global_firmware_event_thread = None
 	__nl_in_socket = None
@@ -855,7 +856,7 @@ class ServerSocket:
 		# For Atheros AR9271:
 		# 	Supported rates IE and DS parameter set IE have to be present in probe response, otherwise the frame is discarded
 		#	additional note on Atheros: 
-		# 		- vendor IEs isn't transmitted for probe requests issued by scans from Windows, thus the client-to-server mtu is only 28 bytes
+		# 		- vendor IEs isn't transmitted for probe requests issued by scans from Windows, thus the client-to-server mtu is only 7 bytes
 		#		- vendor IEs from probe responses could be read back (as long as the IEs highlighted above are added), thus client to server MTU is 264 bytes
 		#		- a single scan takes less than 4 seconds
 		#		- a scan caches up to 22 received probe responses (based on observations). We only have 16 sequence numbers, this would break the
@@ -902,8 +903,8 @@ class ServerSocket:
                                 ie_vendor_len,
                                 ie_vendor_data)
 
-		#print repr(buf)
-
+		#print("Outbuf to driver: {0}".format(Helper.s2hex(buf)))
+		
 		ioctl_sendprbrsp = nexconf.create_cmd_ioctl(MaMe82_IO.CMD, buf, True)
 		nexconf.sendNL_IOCTL(ioctl_sendprbrsp, nl_socket_fd=ServerSocket.__nl_out_socket_fd)
 
@@ -1084,8 +1085,8 @@ class Server(cmd.Cmd):
 		print("Start interacting with remote process of client {0} ... Press <CTRL+C> for menu".format(clientID))
 		while interact:
 			try:
-				# raise KeyboardInterrupt
-				if select([sys.stdin], [], [], 0.05)[0]: # 50 ms timeout, to keep CPU load low
+				#raise KeyboardInterrupt
+				if select([sys.stdin], [], [], 0.1)[0]: # 100 ms timeout, to keep CPU load low
 					input = sys.stdin.readline() # replace readline by accumulation of input chars til carriage return
 					#input = input.replace('\n', '\r\n')
 					input = input.replace('\n', '\r\n')
@@ -1095,16 +1096,12 @@ class Server(cmd.Cmd):
 					
 					
 			except KeyboardInterrupt:
-				#print("\nInteraction stopped by keyboard interrupt.\nTo continue interaction use 'interact'.")
-				print("\nInteraction with clientID {0} paused.\nWhat do you want to do ?")
-				print("\t1: Background the session")
-				print("\t2: Clear in- and outqueue (long output pending)")
-				print("\t3: Restart the shell (not responsive)")
-				print("\t4: Restart the client (restart shell didn't help)")
-				print("\t5: Exit the client (Warning: client won't connect back again)")
+				print("\nInteraction with clientID {0} paused.\nWhat do you want to do ?".format(cs.clientID))
 				print("\t0: Continue interaction")
-
-
+				print("\t1: Background the session")
+				print("\t2: Restart the client (connects back again)")
+				print("\t3: Exit the client (Warning: client won't connect back again)")				
+				#print("\t4: [not implemented] Clear in- and outqueue (long output pending)")
 
 				hasChosen = False
 				options = [0, 1, 2, 3, 4, 5]
@@ -1127,10 +1124,18 @@ class Server(cmd.Cmd):
 				elif selection == 1:
 					interact = False
 					continue
-				elif selection == 4:
+				elif selection == 2:
 					interact = False
 					cs.disconnect(Packet.CON_RESET_REASON_UNSPECIFIED)
-					continue			
+					continue
+				elif selection == 3:
+					interact = False
+					# ToDo: client couldn't be deleted from connections list with state open, as it currently doesn't respond to kill and thus we have to resend it to assure reception
+					cs.sendCtlMessage(Packet.CTLM_TYPE_KILL_CLIENT, "")
+					continue
+				elif selection == 4:
+					
+					print("This option is under development")
 				else:
 					# ToDo
 					print("Option not implemented")
@@ -1175,7 +1180,7 @@ class Server(cmd.Cmd):
 
 
 ##### MAIN CODE #####
-srv = Server(srvID=9, max_clients=3)
+srv = Server(srvID=9, max_clients=15)
 try:
 	srv.cmdloop(intro=None)
 except KeyboardInterrupt:
